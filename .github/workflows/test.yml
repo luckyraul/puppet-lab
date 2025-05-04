@@ -1,0 +1,79 @@
+---
+name: CI
+
+on:
+  workflow_call:
+
+env:
+  PDK_DISABLE_ANALYTICS: yes
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        PUPPET_VERSION:
+          - '7'
+          - '8'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the PDK
+        run: |
+          source /etc/os-release
+          wget https://apt.puppet.com/puppet-tools-release-${UBUNTU_CODENAME}.deb
+          sudo dpkg -i puppet-tools-release-${UBUNTU_CODENAME}.deb
+          sudo apt-get -qq update
+          sudo apt-get -qqy install pdk
+      - name: Syntax validation
+        run: pdk validate --puppet-version ${{ matrix.PUPPET_VERSION }}
+      - name: Unit tests
+        run: pdk test unit --puppet-version ${{ matrix.PUPPET_VERSION }}
+  acceptance:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        PUPPET_VERSION: [7,8]
+        OS: [debian:11, debian:12, ubuntu:22.04, ubuntu:24.04, redhat/ubi9:latest, oraclelinux:9]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Dockerfile for Debian-family
+        shell: bash
+        if: startsWith(matrix.OS, 'debian') || startsWith(matrix.OS, 'ubuntu')
+        run: |
+          cat <<'EOF' > Dockerfile
+          FROM ${{ matrix.OS }}
+          RUN apt-get update -qq && apt-get install -qqy lsb-release wget curl && \
+          curl -sLO https://apt.puppetlabs.com/puppet${{ matrix.PUPPET_VERSION }}-release-$(lsb_release -cs 2>/dev/null).deb && \
+          dpkg -i puppet${{ matrix.PUPPET_VERSION }}-release-$(lsb_release -cs 2>/dev/null).deb && \
+          apt-get update -qq && \
+          apt-get install -qqy puppet-agent
+          EOF
+      - name: Create Dockerfile for Redhat-family
+        shell: bash
+        if: startsWith(matrix.OS, 'redhat') || startsWith(matrix.OS, 'oraclelinux')
+        run: |
+          cat <<'EOF' > Dockerfile
+          FROM ${{ matrix.OS }}
+          RUN rpm -Uvh https://yum.puppet.com/puppet${{ matrix.PUPPET_VERSION }}-release-el-$(cat /etc/system-release-cpe | cut -d ':' -f5).noarch.rpm && dnf install -y puppet-agent
+          EOF
+      - name: View Dockerfile
+        run: cat Dockerfile
+      - name: Build Docker image
+        run: docker build -t puppet-lab:${GITHUB_RUN_ID} .
+      - name: Test Docker image
+        run: docker container run --rm -t puppet-lab:${GITHUB_RUN_ID} cat /etc/os-release
+      - name: Run Docker image
+        run: docker container run --rm -d --name puppet-lab puppet-lab:${GITHUB_RUN_ID} tail -f /dev/null
+      - name: Run Puppet Manifest Example
+        run: |
+          cat <<'EOF' > manifest.pp
+          package { 'nginx':
+            ensure  => 'installed'
+          }
+          EOF
+          docker cp manifest.pp puppet-lab:/tmp/
+          docker container exec -t puppet-lab /opt/puppetlabs/bin/puppet apply --verbose /tmp/manifest.pp
+      - name: Stop Docker image
+        run: docker container stop puppet-lab
