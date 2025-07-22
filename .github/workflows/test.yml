@@ -71,6 +71,8 @@ jobs:
         run: docker build -t puppet-lab:${GITHUB_RUN_ID} .
       - name: Test Docker image
         run: docker container run --rm -t puppet-lab:${GITHUB_RUN_ID} cat /etc/os-release
+      # - name: Setup tmate session
+      #   uses: mxschmitt/action-tmate@v3
       - name: Run Rspec
         run: pdk bundle exec rspec
   acceptance_redhat:
@@ -120,7 +122,7 @@ jobs:
       fail-fast: false
       matrix:
         PUPPET_VERSION: [8]
-        OS: [debian:13]
+        OS: [debian:trixie]
     steps:
       - uses: actions/checkout@v4
       - name: Install the PDK
