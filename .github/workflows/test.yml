@@ -142,9 +142,9 @@ jobs:
           cat <<EOF > Dockerfile
           FROM ${{ matrix.OS }}
           RUN apt-get update -qq && apt-get install -qqy lsb-release wget curl && \
-          curl -sLO https://apt.puppetlabs.com/puppet${{ matrix.PUPPET_VERSION }}-release-\$(lsb_release -cs 2>/dev/null).deb && \
-          dpkg -i puppet${{ matrix.PUPPET_VERSION }}-release-\$(lsb_release -cs 2>/dev/null).deb && \
-          rm puppet${{ matrix.PUPPET_VERSION }}-release-\$(lsb_release -cs 2>/dev/null).deb && \
+          curl -sLO https://apt.puppetlabs.com/puppet${{ matrix.PUPPET_VERSION }}-release-bookworm.deb && \
+          dpkg -i puppet${{ matrix.PUPPET_VERSION }}-release-bookworm.deb && \
+          rm puppet${{ matrix.PUPPET_VERSION }}-release-bookworm.deb && \
           apt-get update -qq && \
           apt-get install -qqy puppet-agent
           COPY pkg/${DYNAMIC_FILE} .
