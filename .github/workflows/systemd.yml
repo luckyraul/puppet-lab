@@ -1,0 +1,177 @@
+name: Systemd Images
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debian:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [11, 12, 13]
+        puppet: [7, 8]
+        exclude:
+          - version: 13
+            puppet: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Dockerfile
+        run: sed -i "s|puppet8|puppet${{ matrix.puppet }}|g" debian/${{ matrix.version }}.Dockerfile
+      - name: Build image
+        run: |
+          export IMAGE_NAME=systemd:debian-${{ matrix.version }}-v${{ matrix.puppet }}
+          docker build . --file debian/${{ matrix.version }}.Dockerfile --tag $IMAGE_NAME
+      - name: Run Image
+        run: docker run -d --name test-systemd --rm --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:rw --cgroupns=host systemd:debian-${{ matrix.version }}-v${{ matrix.puppet }}
+      - name: Test Container Systemd Version
+        run: docker exec -t test-systemd systemctl --version
+      - name: Test Container Puppet Version
+        run: docker exec -t test-systemd puppet --version
+      - name: Stop Container
+        run: docker stop test-systemd
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.CR_PAT }}
+      - name: Push image
+        run: |
+          export IMAGE_NAME=systemd:debian-${{ matrix.version }}-v${{ matrix.puppet }}
+          export IMAGE_ID=ghcr.io/luckyraul/systemd:debian-${{ matrix.version }}-v${{ matrix.puppet }}
+
+          # Change all uppercase to lowercase
+          export IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          # Retag
+          docker tag $IMAGE_NAME $IMAGE_ID
+          docker push $IMAGE_ID
+  ubuntu:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['22.04', '24.04']
+        puppet: [7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Dockerfile
+        run: sed -i "s|puppet8|puppet${{ matrix.puppet }}|g" ubuntu/${{ matrix.version }}.Dockerfile
+      - name: Build image
+        run: |
+          export IMAGE_NAME=systemd:ubuntu-${{ matrix.version }}-v${{ matrix.puppet }}
+          docker build . --file ubuntu/${{ matrix.version }}.Dockerfile --tag $IMAGE_NAME
+      - name: Run Image
+        run: docker run -d --name test-systemd --rm --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:rw --cgroupns=host systemd:ubuntu-${{ matrix.version }}-v${{ matrix.puppet }}
+      - name: Test Container Systemd Version
+        run: docker exec -t test-systemd systemctl --version
+      - name: Test Container Puppet Version
+        run: docker exec -t test-systemd puppet --version
+      - name: Stop Container
+        run: docker stop test-systemd
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.CR_PAT }}
+      - name: Push image
+        run: |
+          export IMAGE_NAME=systemd:ubuntu-${{ matrix.version }}-v${{ matrix.puppet }}
+          export IMAGE_ID=ghcr.io/luckyraul/systemd:ubuntu-${{ matrix.version }}-v${{ matrix.puppet }}
+
+          # Change all uppercase to lowercase
+          export IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          # Retag
+          docker tag $IMAGE_NAME $IMAGE_ID
+          docker push $IMAGE_ID
+  redhat:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['ubi9']
+        puppet: [7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Dockerfile
+        run: sed -i "s|puppet8|puppet${{ matrix.puppet }}|g" redhat/${{ matrix.version }}.Dockerfile
+      - name: Build image
+        run: |
+          export IMAGE_NAME=systemd:redhat-${{ matrix.version }}-v${{ matrix.puppet }}
+          docker build . --file redhat/${{ matrix.version }}.Dockerfile --tag $IMAGE_NAME
+      - name: Run Image
+        run: docker run -d --name test-systemd --rm --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:rw --cgroupns=host systemd:redhat-${{ matrix.version }}-v${{ matrix.puppet }}
+      - name: Test Container Systemd Version
+        run: docker exec -t test-systemd systemctl --version
+      - name: Test Container Puppet Version
+        run: docker exec -t test-systemd puppet --version
+      - name: Stop Container
+        run: docker stop test-systemd
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.CR_PAT }}
+      - name: Push image
+        run: |
+          export IMAGE_NAME=systemd:redhat-${{ matrix.version }}-v${{ matrix.puppet }}
+          export IMAGE_ID=ghcr.io/luckyraul/systemd:redhat-${{ matrix.version }}-v${{ matrix.puppet }}
+
+          # Change all uppercase to lowercase
+          export IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          # Retag
+          docker tag $IMAGE_NAME $IMAGE_ID
+          docker push $IMAGE_ID
+  oracle:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [9]
+        puppet: [7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Dockerfile
+        run: sed -i "s|puppet8|puppet${{ matrix.puppet }}|g" oracle/${{ matrix.version }}.Dockerfile
+      - name: Build image
+        run: |
+          export IMAGE_NAME=systemd:oracle-${{ matrix.version }}-v${{ matrix.puppet }}
+          docker build . --file oracle/${{ matrix.version }}.Dockerfile --tag $IMAGE_NAME
+      - name: Run Image
+        run: docker run -d --name test-systemd --rm --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:rw --cgroupns=host systemd:oracle-${{ matrix.version }}-v${{ matrix.puppet }}
+      - name: Test Container Systemd Version
+        run: docker exec -t test-systemd systemctl --version
+      - name: Test Container Puppet Version
+        run: docker exec -t test-systemd puppet --version
+      - name: Stop Container
+        run: docker stop test-systemd
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.CR_PAT }}
+      - name: Push image
+        run: |
+          export IMAGE_NAME=systemd:oracle-${{ matrix.version }}-v${{ matrix.puppet }}
+          export IMAGE_ID=ghcr.io/luckyraul/systemd:oracle-${{ matrix.version }}-v${{ matrix.puppet }}
+
+          # Change all uppercase to lowercase
+          export IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          # Retag
+          docker tag $IMAGE_NAME $IMAGE_ID
+          docker push $IMAGE_ID
+
+  post_build:
+    needs: [debian, ubuntu]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete untagged ghcr LR
+        uses: Chizkiyahu/delete-untagged-ghcr-action@v3
+        with:
+          token: ${{ secrets.CR_PAT }}
+          repository_owner: ${{ github.repository_owner }}
+          owner_type: user
+          package_name: systemd
