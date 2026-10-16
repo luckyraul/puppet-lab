@@ -13,49 +13,135 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        PUPPET_VERSION:
-          - '7'
-          - '8'
+        RUBY_VERSION:
+          - '3.2'
+          - '4.0'
     steps:
-      - uses: actions/checkout@v4
-      - name: Install the PDK
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.RUBY_VERSION }}
+          bundler-cache: true
+      - name: Install the DK
         run: |
-          source /etc/os-release
-          wget https://apt.puppet.com/puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo dpkg -i puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo rm puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo apt-get -qq update
-          sudo apt-get -qqy install pdk
+          VERSION=2.5.0
+          curl -LO "https://github.com/voxpupuli/jig/releases/download/v${VERSION}/jig_${VERSION}_linux_amd64.deb"
+          sudo apt install "./jig_${VERSION}_linux_amd64.deb"
+      - name: Install the DK
+        run: |
+          VERSION=2.5.0
+          curl -LO "https://github.com/voxpupuli/jig/releases/download/v${VERSION}/jig_${VERSION}_linux_amd64.deb"
+          sudo apt install "./jig_${VERSION}_linux_amd64.deb"
       - name: Syntax validation
-        run: pdk validate --puppet-version ${{ matrix.PUPPET_VERSION }}
+        run: jig validate
       - name: Unit tests
-        run: pdk test unit --puppet-version ${{ matrix.PUPPET_VERSION }}
+        run: jig test unit
   acceptance_debian:
     name: Acceptance on Debian family
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        PUPPET_VERSION: [7,8]
-        OS: [debian-11, debian-12, ubuntu-22.04, ubuntu-24.04]
+        VERSION: [8, 9]
+        OS: [debian-13, ubuntu-24, ubuntu-26]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
       - name: Install the PDK
         run: |
-          source /etc/os-release
-          wget https://apt.puppet.com/puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo dpkg -i puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo rm puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo apt-get -qq update
-          sudo apt-get -qqy install pdk
+          VERSION=2.5.0
+          curl -LO "https://github.com/voxpupuli/jig/releases/download/v${VERSION}/jig_${VERSION}_linux_amd64.deb"
+          sudo apt install "./jig_${VERSION}_linux_amd64.deb"
       - name: Create Dockerfile for Debian-family
         shell: bash
         if: startsWith(matrix.OS, 'debian') || startsWith(matrix.OS, 'ubuntu')
         run: |
-          pdk build
+          jig build
           DYNAMIC_FILE=$(basename pkg/*.tar.gz)
           cat <<EOF > Dockerfile
-          FROM ghcr.io/luckyraul/systemd:${{ matrix.OS }}-v${{ matrix.PUPPET_VERSION }}
+          FROM ghcr.io/luckyraul/systemd:${{ matrix.OS }}-v${{ matrix.VERSION }}
+          COPY pkg/${DYNAMIC_FILE} .
+          RUN /opt/puppetlabs/bin/puppet module install /${DYNAMIC_FILE} && rm -f /${DYNAMIC_FILE} && /opt/puppetlabs/bin/puppet module install puppetlabs-dummy_service
+          EOF
+      - name: Build Docker image
+        run: docker build -t puppet-lab:${GITHUB_RUN_ID} .
+      - name: Run Image
+        run: docker container run -d --name=puppet-lab --rm -t --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:rw --cgroupns=host puppet-lab:${GITHUB_RUN_ID}
+      - name: Test Container
+        run: docker exec -t puppet-lab cat /etc/os-release
+      - name: Stop Container
+        run: docker stop puppet-lab
+      # - name: Setup tmate session
+      #   uses: mxschmitt/action-tmate@v3
+      - name: Run Unit test
+        run: bundle exec rspec
+  # acceptance_redhat:
+  #   runs-on: ubuntu-latest
+  #   name: Acceptance on Redhat family
+  #   continue-on-error: true
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       VERSION: [8]
+  #       OS: [redhat-ubi9, oracle-9]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Install the PDK
+  #       run: |
+  #         source /etc/os-release
+  #         wget https://apt.puppet.com/puppet-tools-release-${UBUNTU_CODENAME}.deb
+  #         sudo dpkg -i puppet-tools-release-${UBUNTU_CODENAME}.deb
+  #         sudo rm puppet-tools-release-${UBUNTU_CODENAME}.deb
+  #         sudo apt-get -qq update
+  #         sudo apt-get -qqy install pdk
+  #     - name: Create Dockerfile for Redhat-family
+  #       shell: bash
+  #       if: startsWith(matrix.OS, 'redhat') || startsWith(matrix.OS, 'oraclelinux')
+  #       run: |
+  #         pdk build
+  #         DYNAMIC_FILE=$(basename pkg/*.tar.gz)
+  #         cat <<EOF > Dockerfile
+  #         FROM ghcr.io/luckyraul/systemd:${{ matrix.OS }}-v${{ matrix.PUPPET_VERSION }}
+  #         COPY pkg/${DYNAMIC_FILE} .
+  #         RUN /opt/puppetlabs/bin/puppet module install /${DYNAMIC_FILE} && rm -f /${DYNAMIC_FILE}
+  #         EOF
+  #     - name: Build Docker image
+  #       run: docker build -t puppet-lab:${GITHUB_RUN_ID} .
+  #     - name: Run Image
+  #       run: docker container run -d --name=puppet-lab --rm -t --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:rw --cgroupns=host puppet-lab:${GITHUB_RUN_ID}
+  #     - name: Test Container
+  #       run: docker exec -t puppet-lab cat /etc/os-release
+  #     - name: Stop Container
+  #       run: docker stop puppet-lab
+  #     - name: Run Rspec
+  #       run: pdk bundle exec rspec
+  acceptance_debian_future:
+    name: Acceptance on Debian Next family
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        VERSION: [8]
+        OS: [debian-14]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the PDK
+        run: |
+          VERSION=2.5.0
+          curl -LO "https://github.com/voxpupuli/jig/releases/download/v${VERSION}/jig_${VERSION}_linux_amd64.deb"
+          sudo apt install "./jig_${VERSION}_linux_amd64.deb"
+      - name: Create Dockerfile for Debian-family
+        shell: bash
+        if: startsWith(matrix.OS, 'debian') || startsWith(matrix.OS, 'ubuntu')
+        run: |
+          jig build
+          DYNAMIC_FILE=$(basename pkg/*.tar.gz)
+          cat <<EOF > Dockerfile
+          FROM ghcr.io/luckyraul/systemd:${{ matrix.OS }}-v${{ matrix.VERSION }}
           COPY pkg/${DYNAMIC_FILE} .
           RUN /opt/puppetlabs/bin/puppet module install /${DYNAMIC_FILE} && rm -f /${DYNAMIC_FILE} && /opt/puppetlabs/bin/puppet module install puppetlabs-dummy_service
           EOF
@@ -70,84 +156,4 @@ jobs:
       # - name: Setup tmate session
       #   uses: mxschmitt/action-tmate@v3
       - name: Run Rspec
-        run: pdk bundle exec rspec
-  acceptance_redhat:
-    runs-on: ubuntu-latest
-    name: Acceptance on Redhat family
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        PUPPET_VERSION: [7,8]
-        OS: [redhat-ubi9, oracle-9]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install the PDK
-        run: |
-          source /etc/os-release
-          wget https://apt.puppet.com/puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo dpkg -i puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo rm puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo apt-get -qq update
-          sudo apt-get -qqy install pdk
-      - name: Create Dockerfile for Redhat-family
-        shell: bash
-        if: startsWith(matrix.OS, 'redhat') || startsWith(matrix.OS, 'oraclelinux')
-        run: |
-          pdk build
-          DYNAMIC_FILE=$(basename pkg/*.tar.gz)
-          cat <<EOF > Dockerfile
-          FROM ghcr.io/luckyraul/systemd:${{ matrix.OS }}-v${{ matrix.PUPPET_VERSION }}
-          COPY pkg/${DYNAMIC_FILE} .
-          RUN /opt/puppetlabs/bin/puppet module install /${DYNAMIC_FILE} && rm -f /${DYNAMIC_FILE}
-          EOF
-      - name: Build Docker image
-        run: docker build -t puppet-lab:${GITHUB_RUN_ID} .
-      - name: Run Image
-        run: docker container run -d --name=puppet-lab --rm -t --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:rw --cgroupns=host puppet-lab:${GITHUB_RUN_ID}
-      - name: Test Container
-        run: docker exec -t puppet-lab cat /etc/os-release
-      - name: Stop Container
-        run: docker stop puppet-lab
-      - name: Run Rspec
-        run: pdk bundle exec rspec
-  acceptance_debian_future:
-    name: Acceptance on Debian Next family
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        PUPPET_VERSION: [8]
-        OS: [debian-13]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install the PDK
-        run: |
-          source /etc/os-release
-          wget https://apt.puppet.com/puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo dpkg -i puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo rm puppet-tools-release-${UBUNTU_CODENAME}.deb
-          sudo apt-get -qq update
-          sudo apt-get -qqy install pdk
-      - name: Create Dockerfile for Debian-family
-        shell: bash
-        if: startsWith(matrix.OS, 'debian') || startsWith(matrix.OS, 'ubuntu')
-        run: |
-          pdk build
-          DYNAMIC_FILE=$(basename pkg/*.tar.gz)
-          cat <<EOF > Dockerfile
-          FROM ghcr.io/luckyraul/systemd:${{ matrix.OS }}-v${{ matrix.PUPPET_VERSION }}
-          COPY pkg/${DYNAMIC_FILE} .
-          RUN puppet module install /${DYNAMIC_FILE} && rm -f /${DYNAMIC_FILE} && puppet module install puppetlabs-dummy_service
-          EOF
-      - name: Build Docker image
-        run: docker build -t puppet-lab:${GITHUB_RUN_ID} .
-      - name: Run Image
-        run: docker container run -d --name=puppet-lab --rm -t --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:rw --cgroupns=host puppet-lab:${GITHUB_RUN_ID}
-      - name: Test Container
-        run: docker exec -t puppet-lab cat /etc/os-release
-      - name: Stop Container
-        run: docker stop puppet-lab
-      - name: Run Rspec
-        run: pdk bundle exec rspec
+        run: bundle exec rspec

@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:26.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV container=docker
@@ -16,14 +16,13 @@ RUN find /etc/systemd/system \
     -not -name '*systemd-user-sessions*' \
     -print0 | xargs -0 rm -vf
 
-RUN curl -sLO https://apt.puppetlabs.com/puppet8-release-$(lsb_release -cs 2>/dev/null).deb && \
-    dpkg -i puppet8-release-$(lsb_release -cs 2>/dev/null).deb && \
-    rm puppet8-release-$(lsb_release -cs 2>/dev/null).deb
-ENV PATH=/opt/puppetlabs/bin:$PATH
-
-RUN apt-get update -qq && \
-    apt-get install -qqy puppet-agent && \
-    apt-get clean
+RUN . /etc/os-release \
+    && curl -fLO "https://apt.voxpupuli.org/openvox8-release-ubuntu${VERSION_ID}.deb" \
+    && apt-get install -y "./openvox8-release-ubuntu${VERSION_ID}.deb" \
+    && rm -f "openvox8-release-ubuntu${VERSION_ID}.deb" \
+    && apt-get update -qq \
+    && apt-get install -qqy --no-install-recommends openvox-agent
+ENV PATH=/opt/puppetlabs/bin:/opt/puppetlabs/puppet/bin:$PATH
 
 VOLUME ["/sys/fs/cgroup"]
 ENTRYPOINT ["/lib/systemd/systemd"]
