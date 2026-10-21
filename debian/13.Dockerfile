@@ -16,9 +16,13 @@ RUN find /etc/systemd/system \
     -not -name '*systemd-user-sessions*' \
     -print0 | xargs -0 rm -vf
 
-RUN apt-get update -qq && \
-    apt-get install -qqy puppet-agent && \
-    apt-get clean
+RUN . /etc/os-release \
+    && curl -fLO "https://apt.voxpupuli.org/openvox8-release-debian${VERSION_ID}.deb" \
+    && apt-get install -y "./openvox8-release-debian${VERSION_ID}.deb" \
+    && rm -f "openvox8-release-debian${VERSION_ID}.deb" \
+    && apt-get update -qq \
+    && apt-get install -qqy --no-install-recommends openvox-agent
+ENV PATH=/opt/puppetlabs/bin:/opt/puppetlabs/puppet/bin:$PATH
 
 VOLUME ["/sys/fs/cgroup"]
 ENTRYPOINT ["/lib/systemd/systemd"]
